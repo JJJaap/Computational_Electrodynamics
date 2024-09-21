@@ -1,21 +1,27 @@
 import numpy as np
 from scipy.linalg import expm
-import matplotlib.plot as plt
 
-def star_prod(S1,S2):
-	iden_m = np.array([[1,0,0],
-					   [0,1,0],
-					   [0,0,1]])
+def star_prod(A,B):
+	"""
+	Performs a redheffer star product for two 3D square matrices
+	Assumes matrices come in the form [A_11,A_12,A_21,A_22]
+	A: First list of matrices
+	B: Second list of matrices
+	"""
 
-	D = S1[1]*np.linalg.inv(iden_m-np.linalg.inv(S2[0])*S1[3])
-	F = S2[2]*np.linalg.inv(iden_m-S1[3]*np.linalg.inv(S2[0]))
+	iden_m = np.array([[1,0],
+					   [0,1]])
 
-	S1[0] = S1[0]+D*S2[0]*S1[2]
-	S1[1] = D*S2[1]
-	S1[2] = F*S2[2]
-	S1[3] = S2[3]+F*S1[3]*S2[1]
 
-	return S1
+	mid_inv_1 = np.linalg.inv(iden_m-A[1]*B[2])
+	mid_inv_2 = np.linalg.inv(iden_m-B[2]*A[1])
+
+	B[0] = B[0]*mid_inv_1*A[0]
+	B[1] = B[1]+B[0]*mid_inv_1*A[1]*B[3]
+	B[2] = A[2]+A[3]*mid_inv_2*B[2]*A[0]
+	B[3] = A[3]*mid_inv_2*B[3]
+	
+	return B
 
 def main():
 	"""
@@ -24,18 +30,14 @@ def main():
 
 ######### Adjustable parameters #####
 
-	w     = 550e-9/c    # Frequency of incoming EMR
+	w     = 550e-9/299792458     # Frequency of incoming EMR
 	theta = np.pi/4 	# Incident wave angle [radians]
 	phi   = 0			# Incident wave angle [radians]
 
 	# Device params
 	ep_r  = np.array([2.5,3.5,2])      # electric permitivities of materials
-	mu_r  = np.array([1,1,1])          # magentic permeabilities of materials
+	mu_r  = np.array([1,1,1])          # magnetic permeabilities of materials
 	L     = np.array([0.25,0.75,0.89]) # Thickness of materials
-
-	# Polarization factors
-	p_TE  = 0.25               # relative magnitude of TE
-	p_TM  = np.sqrt(1-p_TE**2) # fixed since we require p_TE^2+P_TM^2=1
 
 #####################################
 
@@ -62,25 +64,12 @@ def main():
 	normal = np.array([0,0,1])
 
 	# Identity matrix
-	iden_m = np.array([[1,0,0],
-					   [0,1,0],
-					   [0,0,1]])
+	iden_m = np.array([[1,0],
+					   [0,1]])
 	
 	# Zero matrix
-	zero_m = np.array([[0,0,0],
-					   [0,0,0],
-					   [0,0,0]])
-
-	# Normal vector for transverse electric
-	crss = np.cross(normal,k_inc_scaled)
-	a_TE = np.array([0,1,0]) if theta==0 else crss/np.abs(crss) # Avoids ambiguity for normal incidence
-
-	# Normal vector for transverse magnetic
-	crss_TE  = np.cross(k_inc_scaled,a_TE)
-	a_TM     = crss_TE/np.abs(crss_TE)
-
-	# Polarization vector
-	P = p_TE*a_TE+p_TM*a_TM
+	zero_m = np.array([[0,0],
+					   [0,0]])
 
 	# Initial global scattering matrix components
 	# We expect no reflection and complete transmission
@@ -100,24 +89,25 @@ def main():
 	A_ref        = iden_m+np.linalg.inv(V_g)*V_ref
 	B_ref        = iden_m-np.linalg.inv(V_g)*V_ref
 	
-	S_ref_11 = -np.lingalg.inv(A_ref)*B_ref
-	S_ref_12 = 2*np.lingalg.inv(A_ref)
-	S_ref_21 = 1/2*(A_ref-B_ref*np.lingalg.inv(A_ref)*B_ref)
-	S_ref_22 = B_ref*np.lingalg.inv(A_ref)
+	S_ref_11 = -np.linalg.inv(A_ref)*B_ref
+	S_ref_12 = 2*np.linalg.inv(A_ref)
+	S_ref_21 = 1/2*(A_ref-B_ref*np.linalg.inv(A_ref)*B_ref)
+	S_ref_22 = B_ref*np.linalg.inv(A_ref)
 
 	# Since my transmission material is the same
 	# as my reflection material, A and B are the same
 
-	S_trm_11 = B_ref*np.lingalg.inv(A_ref)
-	S_trm_12 = 1/2*(A_ref-B_ref*np.lingalg.inv(A_ref)*B_ref)
-	S_trm_21 = 2*np.lingalg.inv(A_ref)
-	S_trm_22 = -np.lingalg.inv(A_ref)*B_ref
+	S_trm_11 = B_ref*np.linalg.inv(A_ref)
+	S_trm_12 = 1/2*(A_ref-B_ref*np.linalg.inv(A_ref)*B_ref)
+	S_trm_21 = 2*np.linalg.inv(A_ref)
+	S_trm_22 = -np.linalg.inv(A_ref)*B_ref
 
 ###################################################
 
 #################### Loop over Layers ####################
 
 	for i in range(len(ep_r)):
+		print(i)
 		# Calculate layer parameters
 		k_scaled_z = np.sqrt(mu_r[i]*ep_r[i]-k_inc_scaled[0]**2-k_inc_scaled[1]**2)
 		Q_i        = np.array([[k_inc_scaled[0]*k_inc_scaled[1]    ,mu_r[i]*ep_r[i]+k_inc_scaled[1]**2],
@@ -149,11 +139,49 @@ def main():
 
 ################### Calculate Source ######################
 
+	# Polarization factors
+	p_TE  = 0.25               # relative magnitude of TE
+	p_TM  = np.sqrt(1-p_TE**2) # fixed since we require p_TE^2+P_TM^2=1
 
+	# Normal vector for transverse electric
+	crss = np.cross(normal,k_inc_scaled)
+	a_TE = np.array([0,1,0]) if theta==0 else crss/np.abs(crss) # Avoids ambiguity for normal incidence
 
-	return
+	# Normal vector for transverse magnetic
+	crss_TE  = np.cross(k_inc_scaled,a_TE)
+	a_TM     = crss_TE/np.abs(crss_TE)
+
+	# Polarization vector
+	P = p_TE*a_TE+p_TM*a_TM
+
+	e_src = np.array([P[0],P[1]])
+
+###########################################################
+
+################### Transmitted & Reflected ######################
+
+	e_ref = S_global_11*e_src
+	e_trm = S_global_21*e_src
+
+##################################################################
+
+################### Longitudinal Field Components ######################
+
+	E_ref_z = -(k_inc_scaled[0]*e_ref[0]+k_inc_scaled[1]*e_ref[1])/(k_ref_z)
+	E_trm_z = -(k_inc_scaled[0]*e_trm[0]+k_inc_scaled[1]*e_trm[1])/(-k_ref_z)
+
+#########################################################################
+
+################### Transmittance and Reflectance ######################
+
+	R = np.abs(np.append(e_ref,E_ref_z))**2
+	T = np.abs(np.append(e_trm,E_trm_z))**2*np.real(-k_ref_z/mu_0)/np.real(k_inc_scaled[2]/mu_0)
+
+########################################################################	
+
+	return R,T
 
 if __name__=="__main__":
-	main()
+	print(main())
 
 
