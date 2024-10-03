@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.linalg import expm
 
 def star_prod(A,B):
@@ -25,7 +26,7 @@ def star_prod(A,B):
 	
 	return C
 
-def main(verbose=False):
+def main(verbose=False,plot=False):
 	"""
 	Assumes isotropic linear materials (for now)
 	"""
@@ -39,7 +40,7 @@ def main(verbose=False):
 	# Device params
 	ep_r  = np.array([2.5,3.5,2])      # electric permitivities of materials
 	mu_r  = np.array([1,1,1])          # magnetic permeabilities of materials
-	L     = np.array([0.25,0.75,0.89])*10**(-6) # Thickness of materials [m]
+	L     = np.array([0.25,0.75,1])    # Thickness of materials [m]
 
 ###################################################
 
@@ -111,6 +112,7 @@ def main(verbose=False):
 
 #################### Loop over Layers ####################
 
+	if verbose: print("\n################# Calculating Global Scattering Matrix #################\n")
 	for i in range(len(ep_r)):
 		# Calculate layer parameters
 		k_scaled_z = np.sqrt(mu_r[i]*ep_r[i]-k_inc_scaled[0]**2-k_inc_scaled[1]**2)
@@ -140,6 +142,7 @@ def main(verbose=False):
 		S = star_prod([S_global_11,S_global_12,S_global_21,S_global_22],[S_11,S_12,S_21,S_22])
 
 		if verbose:
+			
 			if np.array_equal(S_global_11,S[0]):
 				print(f"(!) No change in S_11 for layer {i}")
 			if np.array_equal(S_global_12,S[1]):
@@ -148,15 +151,20 @@ def main(verbose=False):
 				print(f"(!) No change in S_21 for layer {i}")
 			if np.array_equal(S_global_22,S[3]):
 				print(f"(!) No change in S_22 for layer {i}")
-			print("")
+			print()
 
 		S_global_11 = S[0]
 		S_global_12 = S[1]
 		S_global_21 = S[2]
 		S_global_22 = S[3]
+	
+	if verbose: print("########################################################################\n")
+		
 
 
 ################################################################
+
+	if verbose: print("(+) Connecting external media")
 
 #################### Connect External Media ####################
 
@@ -164,6 +172,8 @@ def main(verbose=False):
 	S_global_11,S_global_12,S_global_21,S_global_22 = star_prod([S_global_11,S_global_12,S_global_21,S_global_22],[S_trm_11,S_trm_12,S_trm_21,S_trm_22])
 
 ################################################################
+
+	if verbose: print("(+) Calculating source")
 
 ##################### Calculate Source #########################
 
@@ -186,6 +196,8 @@ def main(verbose=False):
 
 ##################################################################
 
+	if verbose: print("(+) Calulating field components")
+
 ################### Transmitted & Reflected ######################
 
 	e_ref = np.dot(S_global_11,e_src)
@@ -200,6 +212,8 @@ def main(verbose=False):
 
 #########################################################################
 
+	if verbose: print("(+) Calulating transmittance and reflectance")
+
 ################### Transmittance and Reflectance #######################
 
 	R = np.linalg.norm(np.append(e_ref,E_ref_z))**2
@@ -211,9 +225,27 @@ def main(verbose=False):
 		print("\n(-) Reflected (R) and transmitted (T) power do not conform to conservation of energy!")
 		print(f"(-) {R**2:.3f}+{T**2:.3f} != 1")
 		print("(-) Please review input parameters and/or code\n")
+
+	if plot:
+		
+		print(L)
+		#c = ["red","blue","orange","green"]
+
+		plt.plot(range(int(np.sum(L))+1),ls="")
+		
+		pos = 0
+		for i in range(len(L)):
+			plt.axvspan(pos,pos+L[i],alpha=ep_r[i]/np.max(ep_r),color="burlywood",label=f"epsilon: {ep_r[i]:.1f}, mu: {mu_r[i]:.1f}")
+			pos+=L[i]
+
+		plt.legend()
+		plt.title("Device Structure (yz plane)")
+		plt.ylabel("y [m]")
+		plt.xlabel("Depth along z [m]")
+		plt.show()
 	return R,T
 
 if __name__=="__main__":
-	print(main(verbose=True))
+	print(main(verbose=True, plot=False))
 
 
